@@ -1,3 +1,4 @@
+
 name: Build APK
 on:
   push:
@@ -8,6 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: mkdir app && unzip -q myket-game-project.zip -d app
+
       - name: Portrait and signing key
         env:
           KS_PASS: ${{ secrets.KS_PASS }}
@@ -23,21 +25,27 @@ jobs:
           else
             echo "no keystore uploaded, using the test key"
           fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.10.2
+
       - name: Install Android SDK parts
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33"
+
       - run: npm install -g cordova@12
+
       - name: Build
         shell: bash
         working-directory: app/myket-game
@@ -45,17 +53,24 @@ jobs:
           cordova platform add android@12
           cordova plugin add ./myket-iab-plugin
           cordova build android --release --buildConfig=build.json -- --packageType=apk 2>&1 | tee build.log
+
       - name: Check signature
         run: |
           APK=$(ls app/myket-game/platforms/android/app/build/outputs/apk/release/*.apk | head -1)
           GOT=$(keytool -printcert -jarfile "$APK" | grep -i "SHA1:" | head -1 | sed 's/.*SHA1: *//' | tr -d ':' | tr 'A-Z' 'a-z')
           WANT=a70bbe1098d13c9c65da6ace1eb6995b102b26b6
-          if [ "$GOT" = "$WANT" ]; then echo "SIGNATURE MATCH: امضا با نسخه قبلی یکیه" >> $GITHUB_STEP_SUMMARY; else echo "SIGNATURE MISMATCH: امضا فرق داره. APK=$GOT" >> $GITHUB_STEP_SUMMARY; fi
+          if [ "$GOT" = "$WANT" ]; then
+            echo "SIGNATURE MATCH: امضا با نسخه قبلی یکیه" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "SIGNATURE MISMATCH: امضا فرق داره. APK=$GOT" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Show error
         if: failure()
         working-directory: app/myket-game
         run: |
           { echo '```'; grep -n -E "error:|^e: |FAILURE|What went wrong|Could not|not found|does not exist|Unresolved" -A6 build.log | head -80; echo '```'; } >> $GITHUB_STEP_SUMMARY
+
       - uses: actions/upload-artifact@v4
         with:
           name: game-apk
